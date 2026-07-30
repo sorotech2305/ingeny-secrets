@@ -1,0 +1,6 @@
+# LF partout (le script ingeny-creds doit tourner sur Linux/VM sans \r)
+* text=auto eol=lf
+ingeny-creds text eol=lf
+*.sh text eol=lf
+# le coffre chiffré : pas de conversion de fins de ligne
+secrets.enc.json -text

@@ -1,0 +1,12 @@
+# JAMAIS committer un secret en clair ni la clé age.
+# Le SEUL fichier de secrets committable est secrets.enc.json (chiffré).
+*.plain.json
+.vault.plain.json
+.secrets.plain.json
+keys.txt
+*.age
+*.key
+*.pem
+# clés/JSON déposés par erreur dans ce dossier
+gcloud-sa*.json*
+.env

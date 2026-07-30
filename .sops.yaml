@@ -1,0 +1,4 @@
+# Toute donnée chiffrée par SOPS dans ce repo l'est pour cette clé age.
+creation_rules:
+  - path_regex: secrets\.enc\.yaml$
+    age: "age1ulg4fwe4tu0y4rapus9txc4aslmxalsg9pen3u4547v95trwcsdq2wdgmv"

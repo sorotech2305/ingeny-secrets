@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# Coffre à secrets ingeny (SOPS + age).
+#   ingeny-creds pull   -> git pull + déchiffre + dépose chaque fichier à son chemin
+#   ingeny-creds edit   -> ouvre le coffre en clair (édition), rechiffre, commit + push
+#   ingeny-creds list   -> liste les chemins gérés (sans les valeurs)
+#
+# Réglages par machine (variables d'env, valeurs par défaut ci-dessous) :
+#   INGENY_ROOT         racine du dépôt ingeny où déposer les fichiers "repo"
+#   SOPS_AGE_KEY_FILE   fichier de la clé age privée (le seul secret bootstrap)
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+VAULT="$HERE/secrets.enc.json"
+INGENY_ROOT="${INGENY_ROOT:-/c/PosteDev/sources/ingeny}"
+export SOPS_AGE_KEY_FILE="${SOPS_AGE_KEY_FILE:-$HOME/.config/sops/age/keys.txt}"
+
+find_bin() { command -v "$1" 2>/dev/null || find "$HOME/AppData/Local/Microsoft/WinGet/Packages" -maxdepth 3 -iname "$1.exe" 2>/dev/null | head -1; }
+SOPS="$(find_bin sops)"; [ -n "$SOPS" ] || { echo "sops introuvable — installe-le (winget SecretsOPerationS.SOPS)"; exit 1; }
+[ -f "$SOPS_AGE_KEY_FILE" ] || { echo "clé age absente: $SOPS_AGE_KEY_FILE — récupère-la (voir README)"; exit 1; }
+PY="$(command -v python || command -v python3)"
+
+case "${1:-pull}" in
+  pull)
+    git -C "$HERE" pull --ff-only -q 2>/dev/null || true
+    "$SOPS" -d "$VAULT" | INGENY_ROOT="$INGENY_ROOT" HOMEDIR="$HOME" "$PY" - <<'PY'
+import json, os, sys
+v = json.load(sys.stdin)
+root, home = os.environ["INGENY_ROOT"], os.environ["HOMEDIR"]
+def put(base, rel, content):
+    p = os.path.join(base, rel)
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    with open(p, "w", encoding="utf-8", newline="") as f:  # newline="" = préserve les LF (pas de CRLF Windows)
+        f.write(content)
+    try: os.chmod(p, 0o600)
+    except OSError: pass
+    print("  ->", os.path.join(base, rel))
+for rel, c in v.get("repo", {}).items():  put(root, rel, c)
+for rel, c in v.get("home", {}).items():  put(home, rel, c)
+print("Coffre déposé.")
+PY
+    ;;
+  edit)
+    "$SOPS" "$VAULT"
+    git -C "$HERE" add secrets.enc.json
+    git -C "$HERE" commit -q -m "maj secrets" && git -C "$HERE" push -q && echo "Poussé sur le coffre distant."
+    ;;
+  list)
+    "$SOPS" -d "$VAULT" | "$PY" -c "import json,sys; d=json.load(sys.stdin); [print('repo :',k) for k in d.get('repo',{})]; [print('home :',k) for k in d.get('home',{})]"
+    ;;
+  *) echo "usage: ingeny-creds [pull|edit|list]"; exit 1 ;;
+esac
