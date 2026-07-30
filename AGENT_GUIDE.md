@@ -104,16 +104,26 @@ INGENY_ROOT=/opt/ingeny/repo ./ingeny-creds pull      # sur une VM
 
 ## 6. Registre des machines (INGENY_ROOT par machine)
 
-| Machine | Accès | OS | `INGENY_ROOT` |
-|---|---|---|---|
-| Poste Windows (dev principal) | local | Windows | `/c/PosteDev/sources/ingeny` |
-| Dell | `ssh dell` (ProxyJump contabo) | Ubuntu | `/home/soro/projects/llm-training/llm-engineer-academy-main` |
-| VM `ingeny-poste-3` | `ssh worker@<IP>` (projet `ingeny-503918`) | Ubuntu 24.04 | `/opt/ingeny/repo` |
-| VM `ingeny-poste-2` | via gcloud (projet `ingeny-503520`) | Ubuntu 24.04 | `/opt/ingeny/repo` |
-| Asus | `ssh asus` (ou `ssh ai@192.168.1.202`) | Ubuntu | *(à confirmer — mettre le chemin du clone)* |
+**Coffre déployé sur TOUTE la flotte le 2026-07-30** (age+sops installés, clé age posée,
+clone `~/ingeny-secrets`, `pull` testé end-to-end sur chacune).
+
+| Machine | Équipé | Accès | OS | `INGENY_ROOT` |
+|---|:-:|---|---|---|
+| Poste Windows (dev principal) | ✅ 30/07 | local | Windows | `/c/PosteDev/sources/ingeny` |
+| Dell | ✅ 30/07 | `ssh dell` (ProxyJump contabo) | Ubuntu 24.04 | `/home/soro/projects/llm-training/llm-engineer-academy-main` |
+| VM `ingeny-poste-2` | ✅ 30/07 | `ssh worker@<IP>` (projet `ingeny-503520`) | Ubuntu 24.04 | `/opt/ingeny/repo` |
+| VM `ingeny-poste-3` | ✅ 30/07 | `ssh worker@<IP>` (projet `ingeny-503918`) | Ubuntu 24.04 | `/opt/ingeny/repo` |
+| Asus | ✅ 30/07 | `ssh asus` (ou `ssh ai@192.168.1.202`) | Ubuntu | `/home/ai/archi-2` |
+
+Détails d'install par machine :
+- **Dell** : GitHub en **HTTPS + credential helper** (pas SSH), **pas de sudo** → age/sops en binaires `~/.local/bin`. Clone du coffre en HTTPS.
+- **VM poste-2 / poste-3** : GitHub SSH OK, `/opt/ingeny/repo`. **poste-3 est re-stoppée** après déploiement (le coffre reste sur son disque, prêt au prochain `start` : juste refaire `pull`).
+- **Asus** : GitHub SSH OK, dépôt à `/home/ai/archi-2`.
 
 > ⚠️ **L'IP externe des VM change à chaque `start`** — relire au `describe`
 > (cf. `video-factory/infra/RUNBOOK_POSTE_PRODUCTION.md`).
+> ⚠️ Sur les machines Linux, `age`/`sops` sont dans `~/.local/bin` (pas de sudo) —
+> lancer `pull` avec `PATH="$HOME/.local/bin:$PATH"` si besoin.
 
 ---
 
