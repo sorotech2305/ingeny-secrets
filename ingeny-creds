@@ -21,22 +21,8 @@ PY="$(command -v python || command -v python3)"
 case "${1:-pull}" in
   pull)
     git -C "$HERE" pull --ff-only -q 2>/dev/null || true
-    "$SOPS" -d "$VAULT" | INGENY_ROOT="$INGENY_ROOT" HOMEDIR="$HOME" "$PY" - <<'PY'
-import json, os, sys
-v = json.load(sys.stdin)
-root, home = os.environ["INGENY_ROOT"], os.environ["HOMEDIR"]
-def put(base, rel, content):
-    p = os.path.join(base, rel)
-    os.makedirs(os.path.dirname(p), exist_ok=True)
-    with open(p, "w", encoding="utf-8", newline="") as f:  # newline="" = préserve les LF (pas de CRLF Windows)
-        f.write(content)
-    try: os.chmod(p, 0o600)
-    except OSError: pass
-    print("  ->", os.path.join(base, rel))
-for rel, c in v.get("repo", {}).items():  put(root, rel, c)
-for rel, c in v.get("home", {}).items():  put(home, rel, c)
-print("Coffre déposé.")
-PY
+    # sops -d sur stdin -> _deploy.py (programme dans un fichier, pas de conflit stdin)
+    "$SOPS" -d "$VAULT" | INGENY_ROOT="$INGENY_ROOT" HOMEDIR="$HOME" "$PY" "$HERE/_deploy.py"
     ;;
   edit)
     "$SOPS" "$VAULT"
