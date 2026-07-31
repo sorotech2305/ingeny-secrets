@@ -169,15 +169,98 @@ Code bloque ce motif (indistinguable d'une exfiltration). Conséquences :
 
 ---
 
+## 9bis. ⛔ ÉCRIRE DANS LE COFFRE AUTREMENT QU'AVEC `edit` — les quatre pièges
+
+*Écrit le 31/07/2026, après ~40 min perdues et **le coffre vidé deux fois** — par
+deux agents différents, le même jour, sur le même piège (`f810114` « URGENT:
+restaure le coffre »).*
+
+⭐ **La règle courte : si `edit` suffit, utilise `edit`.** Il réutilise les
+métadonnées du fichier existant et esquive les quatre pièges d'un coup. Ce qui suit
+ne sert que si tu dois écrire sans éditeur interactif (agent, script, cron).
+
+### ⛔ 1. Un rechiffrement raté laisse le coffre à ZÉRO octet
+
+```python
+with open(VAULT, "wb") as f:                 # ⛔ TRONQUE AVANT DE SAVOIR
+    subprocess.run(["sops", "-e", clair], stdout=f)
+```
+
+Ouvrir en `"wb"` vide le fichier **immédiatement**. Si `sops` échoue ensuite, le
+coffre est perdu — et il ne se voit pas perdu : `git status` dit juste « modifié ».
+
+**Toujours : chiffrer À CÔTÉ → RELIRE le résultat → remplacer seulement après.**
+
+```python
+with open(neuf, "wb") as f: subprocess.run([...], stdout=f)   # neuf, pas VAULT
+v = subprocess.run(["sops","-d","--input-type","json",neuf], capture_output=True)
+if v.returncode or MA_CLE not in v.stdout.decode():
+    sys.exit("le coffre chiffré ne se relit pas — l'ancien est INTACT")
+shutil.move(neuf, VAULT)
+```
+
+⚠ **Sauvegarde d'abord** (`cp -a secrets.enc.json /tmp/…`). En dernier recours,
+`git checkout -- secrets.enc.json` restaure la dernière version poussée.
+
+### ⛔ 2. `.sops.yaml` ne couvre PAS le coffre — le défaut est toujours là
+
+```yaml
+creation_rules:
+  - path_regex: secrets\.enc\.yaml$      # ⛔ le coffre est un .json
+```
+
+Aucune règle ne matche `secrets.enc.json`. Donc **tout `sops -e` neuf échoue** avec
+`no matching creation rules found`, et seul `edit` marche. Contournement en
+attendant : **nommer le destinataire à la main** (la clé publique est déjà en clair
+dans ce fichier, elle n'est pas un secret) :
+
+```bash
+sops -e --age age1ulg4fwe4tu0y4rapus9txc4aslmxalsg9pen3u4547v95trwcsdq2wdgmv \
+     --input-type json --output-type json <clair> > <chiffré>
+```
+
+**À corriger** : `path_regex: secrets\.enc\.(ya?ml|json)$`.
+
+### ⛔ 3. `sops` cherche ses règles à DEUX endroits
+
+Le dossier courant **et** le dossier du **fichier d'entrée**. Un fichier temporaire
+posé dans `~/ingeny-secrets` suffit à redéclencher l'erreur du §2, même avec
+`--age`. **Le clair ET le `cwd` doivent être hors du coffre** (`/tmp`).
+
+### ⛔ 4. `sops -d` ne devine pas le format d'un fichier qui ne finit pas par `.json`
+
+Un temporaire nommé `…​.enc` fait échouer la relecture, et le garde-fou du §1
+refuse alors un chiffrement pourtant correct. Soit `--input-type json`, soit un
+nom qui finit par `.json`.
+
+### Et deux choses qui ne sont pas des pièges de SOPS
+
+- ⚠ **`ssh -n` coupe l'entrée standard** : `ssh -n machine "cat > /tmp/x.py" <<EOF`
+  écrit un fichier **vide**, le programme « tourne » et sort 0 sans rien faire.
+  Pas de `-n` quand tu envoies du contenu.
+- ⚠ **Un outil non exécutable se signale comme un outil absent.** Sur le Dell,
+  `ingeny-creds` était bien cloné mais sans le bit `+x` : un test `-x` répondait
+  « absent », et un rôle entier a conclu que le coffre n'était pas installé.
+  Corrigé côté dépôt (`22ef8f6`) — **vérifie le fichier avant de conclure qu'il
+  n'a jamais été posé.**
+
+---
+
 ## 10. Dépannage
 
 | Symptôme | Cause | Fix |
 |---|---|---|
 | `clé age absente: …/keys.txt` | pas de clé sur la machine | déposer la clé (§5.2) |
 | `sops introuvable` | binaire hors PATH | installer sops (§5) ou l'appeler par chemin complet |
+| **`no matching creation rules found`** | **`.sops.yaml` ne vise que `.yaml`, le coffre est `.json`** | **`--age <clé>` explicite — §9bis.2** |
+| **`config file not found, or has no creation rules`** | **`sops -e` lancé hors du dossier du coffre, sans `--age`** | **§9bis.2 et §9bis.3** |
+| **`secrets.enc.json` fait 0 octet** | **rechiffrement raté après ouverture en `"wb"`** | **`git checkout -- secrets.enc.json` ; puis §9bis.1** |
+| **le programme envoyé par ssh « tourne » et ne fait rien, exit 0** | **`ssh -n` a coupé le heredoc, le fichier est vide** | **enlever `-n` ; vérifier `wc -l` du fichier reçu** |
+| **`ingeny-creds` « absent » alors que le clone est là** | **bit exécutable manquant** | **`chmod +x ingeny-creds`** |
 | `JSONDecodeError: line 1 column 1` au `pull` | (ancien bug corrigé) programme lu depuis stdin | déjà réglé — `pull` passe par `_deploy.py` |
 | `pull` écrit mais accents bizarres dans un commentaire | le fichier source était déjà en mojibake | cosmétique ; les **valeurs** (ASCII) sont intactes |
 | `Repository not found` au `pull`/`push` | accès SSH GitHub manquant | vérifier `ssh -T git@github.com` → `Hi sorotech2305!` |
+| `non-fast-forward` au `push` du coffre | **un autre agent a poussé avant toi** | `git pull --ff-only` **et revérifie que ton ajout n'y est pas déjà** |
 
 ---
 
